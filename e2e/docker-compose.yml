@@ -76,15 +76,7 @@ services:
       raft: 
         condition: "service_completed_successfully"
     command:
-      - "bitcoin-cli"
-      - "-regtest=1"
-      - "-rpcuser=user"
-      - "-rpcpassword=password"
-      - "-rpcport=18443"
-      - "-rpcconnect=bitcoind"
-      - "generatetoaddress"
-      - "20000"
-      - "$BTC_ADDRESS"
+      - sh -c "sleep 60 && bitcoin-cli -regtest=1 -rpcuser=user -rpcpassword=password -rpcport=18443 -rpcconnect=bitcoind generatetoaddress 20000 $BTC_ADDRESS"
     networks:
       e2e:
 
