@@ -65,6 +65,29 @@ services:
     networks:
       e2e:
 
+  bitcoind-alotmoreblocks:
+    image: "kylemanna/bitcoind@sha256:5d97bbe3c74856818f0b3a1e718eb3968981ab03ce08aaf1c7d528f99aaf30b7"
+    deploy:
+      restart_policy:
+        condition: "any"
+    depends_on:
+      bitcoind: 
+        condition: "service_started"
+      raft: 
+        condition: "service_completed_successfully"
+    command:
+      - "bitcoin-cli"
+      - "-regtest=1"
+      - "-rpcuser=user"
+      - "-rpcpassword=password"
+      - "-rpcport=18443"
+      - "-rpcconnect=bitcoind"
+      - "generatetoaddress"
+      - "20000"
+      - "$BTC_ADDRESS"
+    networks:
+      e2e:
+
   electrs:
     image: blockstream/esplora@sha256:1fb16180f430f75da28eca37a265630c7192b3c103aafd9b9ba4bf5b6d9c8ea8
     depends_on:
