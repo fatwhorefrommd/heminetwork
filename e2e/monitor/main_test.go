@@ -35,7 +35,7 @@ func TestMonitor(t *testing.T) {
 
 	// if we get to 10 minutes without the expected number of pop txs
 	// and HEMI balance, something is wrong, fail the test
-	blockWaitTimeoutTimer := time.NewTimer(10 * time.Minute)
+	blockWaitTimeoutTicker := time.NewTicker(10 * time.Minute)
 
 	increasing := false
 	var lastJo jsonOutput
@@ -44,7 +44,7 @@ func TestMonitor(t *testing.T) {
 	for {
 		// poll every 10 seconds until timeout
 		select {
-		case <-blockWaitTimeoutTimer.C:
+		case <-blockWaitTimeoutTicker.C:
 			t.Logf("checking if numbers have been increasing")
 			if increasing {
 				increasing = false
