@@ -35,7 +35,7 @@ func TestMonitor(t *testing.T) {
 
 	// if we get to 10 minutes without the expected number of pop txs
 	// and HEMI balance, something is wrong, fail the test
-	blockWaitTimeoutTimer := time.NewTimer(1 * time.Minute)
+	blockWaitTimeoutTimer := time.NewTimer(10 * time.Minute)
 
 	increasing := false
 	var lastJo jsonOutput
