@@ -35,12 +35,21 @@ func TestMonitor(t *testing.T) {
 
 	// if we get to 10 minutes without the expected number of pop txs
 	// and HEMI balance, something is wrong, fail the test
-	blockWaitTimeoutTimer := time.NewTimer(10 * time.Minute)
+	blockWaitTimeoutTimer := time.NewTimer(1 * time.Minute)
+
+	increasing := false
+	var lastJo jsonOutput
+	pastPopTxCount := false
 
 	for {
 		// poll every 10 seconds until timeout
 		select {
 		case <-blockWaitTimeoutTimer.C:
+			t.Logf("checking if numbers have been increasing")
+			if increasing {
+				increasing = false
+				continue
+			}
 			t.Fatalf("timed out")
 		case <-time.After(10 * time.Second):
 		}
@@ -55,10 +64,19 @@ func TestMonitor(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		if (!pastPopTxCount && jo.PopTxCount > lastJo.PopTxCount) || jo.PopMinerHemiBalance > lastJo.PopMinerHemiBalance {
+			t.Logf("numbers have been increasing")
+			increasing = true
+		}
+
+		lastJo = jo
+
 		if jo.PopTxCount < uint64(expectedPopTxs) {
 			t.Logf("popTxCount %d < %d", jo.PopTxCount, expectedPopTxs)
 			continue
 		}
+
+		pastPopTxCount = true
 
 		popMinerBalance := big.NewInt(0)
 		balance, ok := popMinerBalance.SetString(jo.PopMinerHemiBalance, 10)
