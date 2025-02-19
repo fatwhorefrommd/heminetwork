@@ -42,7 +42,7 @@ COPY --from=build_1 /git/op-geth /git/op-geth
 WORKDIR /git
 RUN git clone https://github.com/hemilabs/optimism
 WORKDIR /git/optimism
-RUN git checkout 3c8e04f16b142ab4a0bcfb7f192d7d237e9d0c07
+RUN git checkout 75380eb98c735248315b7bac5c85e7e4939465d9
 RUN git submodule update --init --recursive
 RUN pnpm install
 RUN pnpm install:abigen
