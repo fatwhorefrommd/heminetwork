@@ -2446,7 +2446,7 @@ func (s *Server) Run(pctx context.Context) error {
 		return errors.New("run called but External Header mode is enabled")
 	}
 
-	// Rely on DBOpen failing if the database is already open.
+	// Rely on dbOpen failing if the database is already open.
 	ctx, cancel := context.WithCancel(pctx)
 	defer cancel()
 	err := s.DBOpen(ctx)
@@ -2497,27 +2497,29 @@ func (s *Server) Run(pctx context.Context) error {
 	}
 
 	// HTTP server
-	mux := http.NewServeMux()
-	log.Infof("handle (tbc): %s", tbcapi.RouteWebsocket)
-	mux.HandleFunc(tbcapi.RouteWebsocket, s.handleWebsocket)
-
-	httpServer := &http.Server{
-		Addr:        s.cfg.ListenAddress,
-		Handler:     mux,
-		BaseContext: func(_ net.Listener) context.Context { return ctx },
-	}
 	httpErrCh := make(chan error)
-	go func() {
-		log.Infof("Listening: %s", s.cfg.ListenAddress)
-		httpErrCh <- httpServer.ListenAndServe()
-	}()
-	defer func() {
-		if err = httpServer.Shutdown(ctx); err != nil {
-			log.Errorf("http server exit: %v", err)
-			return
+	if s.cfg.ListenAddress != "" {
+		mux := http.NewServeMux()
+		log.Infof("handle (tbc): %s", tbcapi.RouteWebsocket)
+		mux.HandleFunc(tbcapi.RouteWebsocket, s.handleWebsocket)
+
+		httpServer := &http.Server{
+			Addr:        s.cfg.ListenAddress,
+			Handler:     mux,
+			BaseContext: func(_ net.Listener) context.Context { return ctx },
 		}
-		log.Infof("RPC server shutdown cleanly")
-	}()
+		go func() {
+			log.Infof("Listening: %s", s.cfg.ListenAddress)
+			httpErrCh <- httpServer.ListenAndServe()
+		}()
+		defer func() {
+			if err = httpServer.Shutdown(ctx); err != nil {
+				log.Errorf("http server exit: %v", err)
+				return
+			}
+			log.Infof("RPC server shutdown cleanly")
+		}()
+	}
 
 	// pprof
 	if s.cfg.PprofListenAddress != "" {
@@ -2569,57 +2571,59 @@ func (s *Server) Run(pctx context.Context) error {
 	}
 
 	errC := make(chan error)
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		err := s.pm.Run(ctx)
-		log.Infof("Peer manager shutting down")
-		if err != nil {
-			select {
-			case errC <- err:
-			default:
-			}
-		} else {
-			log.Infof("Peer manager clean shutdown")
-		}
-	}()
-
-	// connected peers
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		for {
-			p, err := s.pm.RandomConnect(ctx)
+	if s.cfg.PeersWanted > 0 {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			err := s.pm.Run(ctx)
+			log.Infof("Peer manager shutting down")
 			if err != nil {
-				if errors.Is(err, context.Canceled) {
+				select {
+				case errC <- err:
+				default:
+				}
+			} else {
+				log.Infof("Peer manager clean shutdown")
+			}
+		}()
+
+		// connected peers
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			for {
+				p, err := s.pm.RandomConnect(ctx)
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						return
+					}
+					// Should not be reached
+					log.Errorf("random connect: %v", err)
 					return
 				}
-				// Should not be reached
-				log.Errorf("random connect: %v", err)
-				return
+				go func(pp *rawpeer.RawPeer) {
+					err := s.handlePeer(ctx, pp)
+					if err != nil {
+						log.Debugf("%v: %v", pp, err)
+					}
+				}(p)
 			}
-			go func(pp *rawpeer.RawPeer) {
-				err := s.handlePeer(ctx, pp)
-				if err != nil {
-					log.Debugf("%v: %v", pp, err)
-				}
-			}(p)
-		}
-	}()
+		}()
 
-	// ping loop
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(13 * time.Second):
+		// ping loop
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(13 * time.Second):
+				}
+				s.pm.All(ctx, s.pingPeer)
 			}
-			s.pm.All(ctx, s.pingPeer)
-		}
-	}()
+		}()
+	}
 
 	select {
 	case <-ctx.Done():

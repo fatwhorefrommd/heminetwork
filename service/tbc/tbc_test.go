@@ -20,8 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hemilabs/heminetwork/database"
 	"github.com/hemilabs/heminetwork/database/tbcd"
 	"github.com/hemilabs/heminetwork/hemi/pop"
+	"github.com/juju/loggo"
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/btcutil"
@@ -119,6 +121,95 @@ func countKeystones(b *btcutil.Block) int {
 		}
 	}
 	return keystonesFound
+}
+
+func TestBlockBuild(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+	}()
+
+	// Connect tbc service
+	cfg := &Config{
+		AutoIndex:            false,
+		BlockCacheSize:       "10mb",
+		BlockheaderCacheSize: "1mb",
+		BlockSanity:          false,
+		LevelDBHome:          "../../testdatabase/",
+		//LogLevel:                "tbcd=TRACE:tbc=TRACE:level=DEBUG",
+		MaxCachedTxs:            1000, // XXX
+		MaxCachedKeystones:      1000, // XXX
+		Network:                 "testnet3",
+		PrometheusListenAddress: "",
+		ListenAddress:           "",
+		PeersWanted:             0,
+		MempoolEnabled:          false,
+		Seeds:                   []string{"127.0.0.1:18444"},
+	}
+	_ = loggo.ConfigureLoggers(cfg.LogLevel)
+	s, err := NewServer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		err := s.Run(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			panic(err)
+		}
+	}()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	blockList := []string{
+		"000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", // Testnet3 block 0
+		"00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206",
+		"000000006c02c8ea6e4ff69651f7fcde348fb9d557a06e6957b65552002a7820",
+		"000000008b896e272758da5297bcd98fdc6d97c9b765ecec401e286dc1fdbe10",
+		"000000008b5d0af9ffb1741e38b17b193bd12d7683401cecd2fd94f548b6e5dd",
+		"00000000bc45ac875fbd34f43f7732789b6ec4e8b5974b4406664a75d43b21a1",
+		"000000006633685edce4fa4d8f12d001781c6849837d1632c4e2dd6ff2090a7b",
+		"00000000e29e3aa65f3d12440eac9081844c464aeba7c6e6121dfc8ac0c02ba6",
+		"000000009cbaa1b39a336d3afa300a6d73fab6d81413b2f7965418932a14e2f9",
+		"0000000050ff3053ada24e6ad581fa0295297f20a2747d034997ffc899aa931e", // Testnet3 block 9
+	}
+
+	for i, blkHash := range blockList {
+
+		hb, err := os.ReadFile(fmt.Sprintf("testdata/%v.hex", blkHash))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rb, err := hex.DecodeString(string(hb))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		blk, err := btcutil.NewBlockFromBytes(rb)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		msg := &wire.MsgHeaders{
+			Headers: []*wire.BlockHeader{&blk.MsgBlock().Header},
+		}
+
+		_, _, _, _, err = s.BlockHeadersInsert(ctx, msg)
+		var et database.DuplicateError
+		if err != nil && !errors.Is(err, et) {
+			t.Fatal(err)
+		}
+
+		_, err = s.BlockInsert(ctx, blk.MsgBlock())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Logf("inserted block %v into tbc", i)
+
+		s.SyncIndexersToHash(ctx, blk.Hash())
+	}
+
 }
 
 func TestKeystonesInBlock(t *testing.T) {
