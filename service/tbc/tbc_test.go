@@ -134,7 +134,8 @@ func TestBlockBuild(t *testing.T) {
 		AutoIndex:            false,
 		BlockCacheSize:       "10mb",
 		BlockheaderCacheSize: "1mb",
-		BlockSanity:          false,
+		BlockSanity:          true,
+		HemiIndex:            true,
 		LevelDBHome:          "../../testdatabase/",
 		//LogLevel:                "tbcd=TRACE:tbc=TRACE:level=DEBUG",
 		MaxCachedTxs:            1000, // XXX
@@ -173,6 +174,7 @@ func TestBlockBuild(t *testing.T) {
 		"0000000050ff3053ada24e6ad581fa0295297f20a2747d034997ffc899aa931e", // Testnet3 block 9
 	}
 
+	var blkFinal *chainhash.Hash
 	for i, blkHash := range blockList {
 
 		hb, err := os.ReadFile(fmt.Sprintf("testdata/%v.hex", blkHash))
@@ -207,8 +209,10 @@ func TestBlockBuild(t *testing.T) {
 
 		t.Logf("inserted block %v into tbc", i)
 
-		s.SyncIndexersToHash(ctx, blk.Hash())
+		blkFinal = blk.Hash()
 	}
+
+	s.SyncIndexersToHash(ctx, blkFinal)
 
 }
 
