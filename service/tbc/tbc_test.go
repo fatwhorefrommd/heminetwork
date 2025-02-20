@@ -182,7 +182,6 @@ func TestBlockBuild(t *testing.T) {
 
 	var blkFinal *chainhash.Hash
 	for i, blkHash := range blockList {
-
 		hb, err := os.ReadFile(fmt.Sprintf("testdata/%v.hex", blkHash))
 		if err != nil {
 			t.Fatal(err)
@@ -219,12 +218,6 @@ func TestBlockBuild(t *testing.T) {
 	}
 
 	s.SyncIndexersToHash(ctx, blkFinal)
-
-	/* 	blkBytes := blkFinal[:]
-	   	err = s.db.MetadataPut(ctx, KeystoneIndexHashKey, blkBytes)
-	   	if err != nil {
-	   		t.Fatal(err)
-	   	} */
 
 	val, err := s.db.MetadataGet(ctx, KeystoneIndexHashKey)
 	if err != nil {
