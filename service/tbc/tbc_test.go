@@ -161,6 +161,12 @@ func TestBlockBuild(t *testing.T) {
 
 	time.Sleep(1000 * time.Millisecond)
 
+	// override hemi hash height to ensure that we do not hit artificial hemi genesis
+	s.hemiGenesis = &HashHeight{
+		Hash:   s2h("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"),
+		Height: 0,
+	}
+
 	blockList := []string{
 		"000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", // Testnet3 block 0
 		"00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206",
