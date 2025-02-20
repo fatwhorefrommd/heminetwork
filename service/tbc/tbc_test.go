@@ -214,6 +214,18 @@ func TestBlockBuild(t *testing.T) {
 
 	s.SyncIndexersToHash(ctx, blkFinal)
 
+	/* 	blkBytes := blkFinal[:]
+	   	err = s.db.MetadataPut(ctx, KeystoneIndexHashKey, blkBytes)
+	   	if err != nil {
+	   		t.Fatal(err)
+	   	} */
+
+	val, err := s.db.MetadataGet(ctx, KeystoneIndexHashKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%v", spew.Sdump(val))
+
 }
 
 func TestKeystonesInBlock(t *testing.T) {
