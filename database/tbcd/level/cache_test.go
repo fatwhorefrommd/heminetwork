@@ -256,6 +256,7 @@ func TestCachePanic(t *testing.T) {
 		for {
 			hb, err = blockstream.BlockHeightHash(ctx, fmt.Sprint(i))
 			if err != nil {
+				t.Logf("%v", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -266,6 +267,7 @@ func TestCachePanic(t *testing.T) {
 		for {
 			blhash, err = blockstream.Block(ctx, hb, true)
 			if err != nil {
+				t.Logf("%v", err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -289,5 +291,6 @@ func TestCachePanic(t *testing.T) {
 
 		l.Put(blk.Hash(), ub)
 		t.Logf("Inserted Block @ height %v: %v", i, hb)
+		t.Logf("Cache size: %v", l.totalSize)
 	}
 }
