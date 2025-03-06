@@ -1,14 +1,19 @@
 package level
 
 import (
+	"context"
+	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/davecgh/go-spew/spew"
 
+	"github.com/hemilabs/heminetwork/cmd/btctool/blockstream"
 	"github.com/hemilabs/heminetwork/database/tbcd"
 )
 
@@ -229,5 +234,60 @@ func TestHC(t *testing.T) {
 	}
 	if _, ok := l.Get(lastHash); !ok {
 		t.Fatalf("incorrect element purged")
+	}
+}
+
+func TestCachePanic(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+	}()
+
+	l, err := lowIQLRUSizeNew(1000000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	startHeight := 813734
+	endHeight := 814658
+
+	for i := startHeight; i <= endHeight; i++ {
+		var hb string
+		for {
+			hb, err = blockstream.BlockHeightHash(ctx, fmt.Sprint(i))
+			if err != nil {
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			break
+		}
+
+		var blhash string
+		for {
+			blhash, err = blockstream.Block(ctx, hb, true)
+			if err != nil {
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			break
+		}
+
+		rb, err := hex.DecodeString(blhash)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		blk, err := btcutil.NewBlockFromBytes(rb)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ub, err := blk.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		l.Put(blk.Hash(), ub)
+		t.Logf("Inserted Block @ height %v: %v", i, hb)
 	}
 }
