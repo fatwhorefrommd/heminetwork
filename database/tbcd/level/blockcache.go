@@ -53,6 +53,7 @@ func (l *lowIQLRU) Put(hash *chainhash.Hash, block []byte) {
 		rha := l.l.Remove(re)
 		rh := rha.(*chainhash.Hash)
 		l.totalSize -= len(l.m[*rh].block)
+		fmt.Printf("Deleting block of size %v from cache, free space is %v", len(l.m[*rh].block), l.size-l.totalSize)
 		delete(l.m, *rh)
 		l.c.Purges++
 	}
