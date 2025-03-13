@@ -1712,7 +1712,7 @@ func TestKeystoneIndexNoFork(t *testing.T) {
 	}
 
 	// check if keystone in db
-	rv, err := s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err := s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1747,7 +1747,7 @@ func TestKeystoneIndexNoFork(t *testing.T) {
 	}
 
 	// check if kss1 in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1757,7 +1757,7 @@ func TestKeystoneIndexNoFork(t *testing.T) {
 	}
 
 	// check if kss2 in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss2Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss2Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1812,13 +1812,13 @@ func TestKeystoneIndexNoFork(t *testing.T) {
 	}
 
 	// check if keystone in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check if keystone stored with correct block hash
 	if !rv.BlockHash.IsEqual(b2.Hash()) {
-		t.Fatalf("wrong blockhash for stored keystone: %v", kss1Hash)
+		t.Fatalf("wrong blockhash for stored keystone: %v", *kss1Hash)
 	}
 
 	err = s.SyncIndexersToHash(ctx, *s.chainParams.GenesisHash)
@@ -1855,7 +1855,7 @@ func TestKeystoneIndexNoFork(t *testing.T) {
 	// check if keystones not in db
 	for _, v := range n.keystones {
 		abrvKss := hemi.L2KeystoneAbbreviate(*v).Hash()
-		_, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, abrvKss)
+		_, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *abrvKss)
 		if err == nil {
 			t.Fatalf("expected fail in db query for keystone: %v", abrvKss)
 		}
@@ -2325,7 +2325,7 @@ func TestKeystoneIndexFork(t *testing.T) {
 	}
 
 	// check if keystone in db
-	rv, err := s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err := s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2361,7 +2361,7 @@ func TestKeystoneIndexFork(t *testing.T) {
 	}
 
 	// check if kss1 in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2371,7 +2371,7 @@ func TestKeystoneIndexFork(t *testing.T) {
 	}
 
 	// check if kss2 in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss2Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss2Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2469,7 +2469,7 @@ func TestKeystoneIndexFork(t *testing.T) {
 	}
 
 	// check if kss1 in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2543,7 +2543,7 @@ func TestKeystoneIndexFork(t *testing.T) {
 	}
 
 	// check if kss1 in db
-	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, kss1Hash)
+	rv, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *kss1Hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2583,7 +2583,7 @@ func TestKeystoneIndexFork(t *testing.T) {
 	// check if keystones not in db
 	for _, v := range n.keystones {
 		abrvKss := hemi.L2KeystoneAbbreviate(*v).Hash()
-		_, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, abrvKss)
+		_, err = s.db.BlockKeystoneByL2KeystoneAbrevHash(ctx, *abrvKss)
 		if err == nil {
 			t.Fatalf("expected fail in db query for keystone: %v", abrvKss)
 		}
