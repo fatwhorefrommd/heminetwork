@@ -24,6 +24,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	btcchaincfg "github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	btcmempool "github.com/btcsuite/btcd/mempool"
 	"github.com/btcsuite/btcd/txscript"
 	btctxscript "github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -316,6 +317,13 @@ func (b *btcNode) newSignedTxFromTx(name string, inTx *btcutil.Tx, amount btcuti
 		return nil, err
 	}
 	if err := vm.Execute(); err != nil {
+		return nil, err
+	}
+
+	// Verify it would make it into the mempool
+	err = btcmempool.CheckTransactionStandard(btcutil.NewTx(redeemTx), 0,
+		time.Now(), btcmempool.DefaultMinRelayTxFee, 2)
+	if err != nil {
 		return nil, err
 	}
 
@@ -2623,6 +2631,12 @@ func TestTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("coinbase signed tx out 0: %v", disasm)
+
+	err = btcmempool.CheckTransactionStandard(btcutil.NewTx(redeemTx), 0,
+		time.Now(), btcmempool.DefaultMinRelayTxFee, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // borrowed from btcd
