@@ -16,11 +16,11 @@ import (
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/juju/loggo"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/hemilabs/heminetwork/api/popapi"
-	"github.com/hemilabs/heminetwork/api/protocol"
 	"github.com/hemilabs/heminetwork/bitcoin/wallet/vinzclortho"
 	"github.com/hemilabs/heminetwork/service/deucalion"
 	"github.com/hemilabs/heminetwork/service/pprof"
@@ -36,11 +36,6 @@ const (
 )
 
 var log = loggo.GetLogger("popm")
-
-type opnodeCmd struct {
-	msg any
-	ch  chan any
-}
 
 func init() {
 	if err := loggo.ConfigureLoggers(logLevel); err != nil {
@@ -82,8 +77,8 @@ type Server struct {
 	promCollectors []prometheus.Collector
 
 	// opnode
-	opnodeWG    sync.WaitGroup
-	opnodeCmdCh chan opnodeCmd
+	opnodeWG     sync.WaitGroup
+	opgethClient *ethclient.Client
 }
 
 func NewServer(cfg *Config) (*Server, error) {
@@ -92,8 +87,7 @@ func NewServer(cfg *Config) (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:         cfg,
-		opnodeCmdCh: make(chan opnodeCmd, 10),
+		cfg: cfg,
 	}
 
 	switch strings.ToLower(cfg.Network) {
@@ -149,145 +143,176 @@ func (s *Server) promRunning() float64 {
 	return 0
 }
 
-func (s *Server) callOpnode(pctx context.Context, timeout time.Duration, msg any) (any, error) {
-	// XXX this code does not go here. move to caller
-	log.Tracef("callOpnode %T", msg)
-	defer log.Tracef("callOpnode exit %T", msg)
+// func (s *Server) callOpnode(pctx context.Context, timeout time.Duration, msg any) (any, error) {
+// 	// XXX this code does not go here. move to caller
+// 	log.Tracef("callOpnode %T", msg)
+// 	defer log.Tracef("callOpnode exit %T", msg)
 
-	bc := opnodeCmd{
-		msg: msg,
-		ch:  make(chan any),
-	}
+// 	bc := opnodeCmd{
+// 		msg: msg,
+// 		ch:  make(chan any),
+// 	}
 
-	ctx, cancel := context.WithTimeout(pctx, timeout)
-	defer cancel()
+// 	ctx, cancel := context.WithTimeout(pctx, timeout)
+// 	defer cancel()
 
-	// attempt to send
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case s.opnodeCmdCh <- bc:
-	default:
-		return nil, errors.New("opnode command queue full")
-	}
+// 	// attempt to send
+// 	select {
+// 	case <-ctx.Done():
+// 		return nil, ctx.Err()
+// 	case s.opnodeCmdCh <- bc:
+// 	default:
+// 		return nil, errors.New("opnode command queue full")
+// 	}
 
-	// Wait for response
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case payload := <-bc.ch:
-		if err, ok := payload.(error); ok {
-			return nil, err
-		}
-		return payload, nil
-	}
+// 	// Wait for response
+// 	select {
+// 	case <-ctx.Done():
+// 		return nil, ctx.Err()
+// 	case payload := <-bc.ch:
+// 		if err, ok := payload.(error); ok {
+// 			return nil, err
+// 		}
+// 		return payload, nil
+// 	}
 
-	// Won't get here
-}
+// 	// Won't get here
+// }
 
-func (s *Server) checkForKeystones(ctx context.Context) error {
-	log.Tracef("Checking for new keystone headers...")
+// func (s *Server) checkForKeystones(ctx context.Context) error {
+// 	log.Tracef("Checking for new keystone headers...")
 
-	ghkr := &popapi.L2KeystoneRequest{
-		Count: 3, // XXX this needs to be a bit smarter, do this based on some sort of time calculation. Do keep it simple, we don't need keystones that are older than let's say, 30 minbutes.
-	}
+// 	ghkr := &popapi.L2KeystoneRequest{
+// 		Count: 3, // XXX this needs to be a bit smarter, do this based on some sort of time calculation. Do keep it simple, we don't need keystones that are older than let's say, 30 minbutes.
+// 	}
 
-	res, err := s.callOpnode(ctx, defaultRequestTimeout, ghkr)
-	if err != nil {
-		return err
-	}
+// 	res, err := s.callOpnode(ctx, defaultRequestTimeout, ghkr)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	ghkrResp, ok := res.(*popapi.L2KeystoneResponse)
-	if !ok {
-		return errors.New("not an L2KeystonesResponse")
-	}
+// 	ghkrResp, ok := res.(*popapi.L2KeystoneResponse)
+// 	if !ok {
+// 		return errors.New("not an L2KeystonesResponse")
+// 	}
 
-	if ghkrResp.Error != nil {
-		return ghkrResp.Error
-	}
+// 	if ghkrResp.Error != nil {
+// 		return ghkrResp.Error
+// 	}
 
-	log.Tracef("Got response with %v keystones", len(ghkrResp.L2Keystones))
+// 	log.Tracef("Got response with %v keystones", len(ghkrResp.L2Keystones))
 
-	return nil
-}
+// 	return nil
+// }
 
-func (s *Server) handleOpnodeWebsocketCall(ctx context.Context, conn *protocol.Conn) {
-	defer s.opnodeWG.Done()
+// func (s *Server) handleOpnodeWebsocketCall(ctx context.Context, conn *protocol.Conn) {
+// 	defer s.opnodeWG.Done()
 
-	log.Tracef("handleOpnodeWebsocketCall")
-	defer log.Tracef("handleOpnodeWebsocketCall exit")
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case bc := <-s.opnodeCmdCh:
-			go s.handleOpnodeCallCompletion(ctx, conn, bc)
-		}
-	}
-}
+// 	log.Tracef("handleOpnodeWebsocketCall")
+// 	defer log.Tracef("handleOpnodeWebsocketCall exit")
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case bc := <-s.opnodeCmdCh:
+// 			go s.handleOpnodeCallCompletion(ctx, conn, bc)
+// 		}
+// 	}
+// }
 
-func (s *Server) handleOpnodeWebsocketRead(ctx context.Context, conn *protocol.Conn) error {
-	defer s.opnodeWG.Done()
+// func (s *Server) handleOpnodeWebsocketRead(ctx context.Context, conn *protocol.Conn) error {
+// 	defer s.opnodeWG.Done()
 
-	log.Tracef("handleOpnodeWebsocketRead")
-	defer log.Tracef("handleOpnodeWebsocketRead exit")
-	for {
-		cmd, rid, payload, err := popapi.ReadConn(ctx, conn)
+// 	log.Tracef("handleOpnodeWebsocketRead")
+// 	defer log.Tracef("handleOpnodeWebsocketRead exit")
+// 	for {
+// 		cmd, rid, payload, err := popapi.ReadConn(ctx, conn)
+// 		if err != nil {
+
+// 			select {
+// 			case <-ctx.Done():
+// 				return ctx.Err()
+// 			case <-time.After(5 * time.Second):
+// 			}
+// 			log.Infof("Connection to opnode was lost, reconnecting...")
+// 			continue
+// 		}
+
+// 		switch cmd {
+// 		case popapi.CmdPingRequest:
+// 			p := payload.(*popapi.PingRequest)
+// 			response := &popapi.PingResponse{
+// 				OriginTimestamp: p.Timestamp,
+// 				Timestamp:       time.Now().Unix(),
+// 			}
+
+// 			if err := popapi.Write(ctx, conn, rid, response); err != nil {
+// 				log.Errorf("Failed to write ping response to opnode server: %v", err)
+// 			}
+// 		case popapi.CmdL2KeystoneNotification:
+// 			go func() {
+// 				if err := s.checkForKeystones(ctx); err != nil {
+// 					log.Errorf("An error occurred while checking for keystones: %v", err)
+// 				}
+// 			}()
+// 		default:
+// 			return fmt.Errorf("unknown command: %v", cmd)
+// 		}
+// 	}
+// }
+
+// func (s *Server) handleOpnodeCallCompletion(pctx context.Context, conn *protocol.Conn, bc opnodeCmd) {
+// 	log.Tracef("handleOpnodeCallCompletion")
+// 	defer log.Tracef("handleOpnodeCallCompletion exit")
+
+// 	ctx, cancel := context.WithTimeout(pctx, defaultRequestTimeout)
+// 	defer cancel()
+
+// 	log.Tracef("handleOpnodeCallCompletion: %v", spew.Sdump(bc.msg))
+
+// 	_, _, payload, err := popapi.Call(ctx, conn, bc.msg)
+// 	if err != nil {
+// 		log.Errorf("handleOpnodeCallCompletion %T: %v", bc.msg, err)
+// 		select {
+// 		case bc.ch <- err:
+// 		default:
+// 		}
+// 	}
+// 	select {
+// 	case bc.ch <- payload:
+// 		log.Tracef("handleOpnodeCallCompletion returned: %v", spew.Sdump(payload))
+// 	default:
+// 	}
+// }
+
+func (s *Server) subscribeOpgeth(pctx context.Context, service string) error {
+	log.Tracef("subscribeOpgeth")
+	defer log.Tracef("subscribeOpgeth exit")
+
+	switch service {
+	case "eth":
+		headersCh := make(chan *types.Header, 10)
+		sub, err := s.opgethClient.SubscribeNewHead(context.Background(), headersCh)
 		if err != nil {
+			return err
+		}
+		defer sub.Unsubscribe()
 
+		ctx, cancel := context.WithCancel(pctx)
+		defer cancel()
+
+		for {
 			select {
+			case err = <-sub.Err():
+				return err
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(5 * time.Second):
+			case n := <-headersCh:
+				spew.Dump(n)
 			}
-			log.Infof("Connection to opnode was lost, reconnecting...")
-			continue
 		}
-
-		switch cmd {
-		case popapi.CmdPingRequest:
-			p := payload.(*popapi.PingRequest)
-			response := &popapi.PingResponse{
-				OriginTimestamp: p.Timestamp,
-				Timestamp:       time.Now().Unix(),
-			}
-
-			if err := popapi.Write(ctx, conn, rid, response); err != nil {
-				log.Errorf("Failed to write ping response to opnode server: %v", err)
-			}
-		case popapi.CmdL2KeystoneNotification:
-			go func() {
-				if err := s.checkForKeystones(ctx); err != nil {
-					log.Errorf("An error occurred while checking for keystones: %v", err)
-				}
-			}()
-		default:
-			return fmt.Errorf("unknown command: %v", cmd)
-		}
-	}
-}
-
-func (s *Server) handleOpnodeCallCompletion(pctx context.Context, conn *protocol.Conn, bc opnodeCmd) {
-	log.Tracef("handleOpnodeCallCompletion")
-	defer log.Tracef("handleOpnodeCallCompletion exit")
-
-	ctx, cancel := context.WithTimeout(pctx, defaultRequestTimeout)
-	defer cancel()
-
-	log.Tracef("handleOpnodeCallCompletion: %v", spew.Sdump(bc.msg))
-
-	_, _, payload, err := popapi.Call(ctx, conn, bc.msg)
-	if err != nil {
-		log.Errorf("handleOpnodeCallCompletion %T: %v", bc.msg, err)
-		select {
-		case bc.ch <- err:
-		default:
-		}
-	}
-	select {
-	case bc.ch <- payload:
-		log.Tracef("handleOpnodeCallCompletion returned: %v", spew.Sdump(payload))
 	default:
+		return fmt.Errorf("subscribeOpgeth: unknown subscription \"%s\"", service)
 	}
 }
 
@@ -295,38 +320,29 @@ func (s *Server) connectOpnode(pctx context.Context) error {
 	log.Tracef("connectOpnode")
 	defer log.Tracef("connectOpnode exit")
 
-	conn, err := protocol.NewConn(s.cfg.OpnodeURL, &protocol.ConnOptions{
-		ReadLimit: 1 * (1 << 20), // 1 MiB
-	})
+	client, err := ethclient.Dial(s.cfg.OpnodeURL)
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	ctx, cancel := context.WithCancel(pctx)
 	defer cancel()
 
-	err = conn.Connect(ctx)
-	if err != nil {
-		return err
-	}
+	log.Debugf("connected to opnode: %s", s.cfg.OpnodeURL)
 
-	rWSCh := make(chan error)
 	s.opnodeWG.Add(1)
 	go func() {
-		rWSCh <- s.handleOpnodeWebsocketRead(ctx, conn)
+		defer s.opnodeWG.Done()
+		go s.subscribeOpgeth(ctx, "eth")
 	}()
-
-	s.opnodeWG.Add(1)
-	go s.handleOpnodeWebsocketCall(ctx, conn)
-
-	log.Debugf("connected to opnode: %s", s.cfg.OpnodeURL)
 
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
-	case err = <-rWSCh:
 	}
 	cancel()
+	client.Close()
 
 	// Wait for exit
 	s.opnodeWG.Wait()

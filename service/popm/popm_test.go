@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/juju/loggo"
 
 	"github.com/hemilabs/heminetwork/api/popapi"
@@ -223,15 +224,16 @@ func TestPopMiner(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Setup fake op-node
-	wg.Add(1)
-	go func() {
-		opnodeLaunch(ctx, t, &wg, "127.0.0.1:9999")
-	}()
-
+	/* 	// Setup fake op-node
+	   	wg.Add(1)
+	   	go func() {
+	   		opnodeLaunch(ctx, t, &wg, "127.0.0.1:9999")
+	   	}()
+	*/
 	// Setup pop miner
 	cfg := NewDefaultConfig()
 	cfg.BitcoinSecret = "5e2deaa9f1bb2bcef294cc36513c591c5594d6b671fe83a104aa2708bc634cb0602599b867332dfec245547baafae40dad247f21564a0de925527f2445a086fd"
+	cfg.OpnodeURL = "ws://localhost:28546"
 	// cfg.LogLevel = "popm=TRACE"
 	if err := loggo.ConfigureLoggers(cfg.LogLevel); err != nil {
 		t.Fatal(err)
@@ -249,7 +251,27 @@ func TestPopMiner(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(30 * time.Second)
+}
+
+func TestOPGethConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wsURL := "ws://localhost:28546"
+
+	client, err := ethclient.Dial(wsURL)
+	if err != nil {
+		t.Fatalf("Failed to connect to the OP Geth server: %v", err)
+	}
+	defer client.Close()
+
+	blockNumber, err := client.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get block number: %v", err)
+	}
+
+	fmt.Printf("Latest Block Number: %d\n", blockNumber)
 }
 
 // fillOutBytes will take a string and return a slice of bytes
