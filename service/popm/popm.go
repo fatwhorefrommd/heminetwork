@@ -320,11 +320,12 @@ func (s *Server) connectOpnode(pctx context.Context) error {
 	log.Tracef("connectOpnode")
 	defer log.Tracef("connectOpnode exit")
 
-	client, err := ethclient.Dial(s.cfg.OpnodeURL)
+	var err error
+	s.opgethClient, err = ethclient.Dial(s.cfg.OpnodeURL)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer s.opgethClient.Close()
 
 	ctx, cancel := context.WithCancel(pctx)
 	defer cancel()
@@ -342,7 +343,7 @@ func (s *Server) connectOpnode(pctx context.Context) error {
 		err = ctx.Err()
 	}
 	cancel()
-	client.Close()
+	s.opgethClient.Close()
 
 	// Wait for exit
 	s.opnodeWG.Wait()
