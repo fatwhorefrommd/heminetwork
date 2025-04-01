@@ -14,6 +14,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,8 +23,10 @@ import (
 	"time"
 
 	"github.com/juju/loggo"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/hemilabs/heminetwork/database/tbcd"
+	"github.com/hemilabs/heminetwork/database/tbcd/level"
 	"github.com/hemilabs/heminetwork/hemi/pop"
 
 	"github.com/btcsuite/btcd/blockchain"
@@ -121,6 +125,123 @@ func countKeystones(b *btcutil.Block) int {
 		}
 	}
 	return keystonesFound
+}
+
+func TestDbUpgradePipeline(t *testing.T) {
+	home := t.TempDir()
+	network := "testnet3"
+	t.Logf("temp: %v", home)
+
+	err := extract("testdata/testdatabase.tar.gz", home)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	// Upgrade database to v3 with move
+	cfg := level.NewConfig(filepath.Join(home, network), "0mb", "0mb")
+	dbTemp, err := level.New(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get all db keys
+	keys := make([]string, 0, len(dbTemp.DB()))
+	for k := range dbTemp.DB() {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Rename database $HOME to $HOME.move
+	err = os.Rename(cfg.Home, cfg.Home+".move")
+	if err != nil {
+		t.Fatal(fmt.Errorf("rename destination: %w", err))
+	}
+
+	// Close temporary DB
+	if err = dbTemp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Open move DB
+	cfgMove := level.NewConfig(filepath.Join(home, network+".move"), "0mb", "0mb")
+	dbMove, err := level.New(ctx, cfgMove)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = extract("testdata/testdatabase.tar.gz", home)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Set mode to copy
+	level.SetMode(false)
+
+	// Upgrade database to v3 with move which
+	// creates a testnet3.v3 folder
+	dbv2, err := level.New(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Open copy DB
+	cfgCopy := level.NewConfig(filepath.Join(home, network+".v3"), "0mb", "0mb")
+	dbCopy, err := level.New(ctx, cfgCopy)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Compare all databases
+	for _, dbs := range keys {
+		a := dbv2.DB()[dbs]
+		b := dbMove.DB()[dbs]
+		c := dbCopy.DB()[dbs]
+
+		records, err := cmpDB(a, b)
+		if err != nil {
+			t.Fatalf("found diff in %v: %v", dbs, err)
+		}
+
+		_, err = cmpDB(b, a)
+		if err != nil {
+			t.Fatalf("found diff in %v: %v", dbs, err)
+		}
+
+		_, err = cmpDB(a, c)
+		if err != nil {
+			t.Fatalf("found diff in %v: %v", dbs, err)
+		}
+
+		_, err = cmpDB(c, a)
+		if err != nil {
+			t.Fatalf("found diff in %v: %v", dbs, err)
+		}
+
+		t.Logf("Found no diff in %v records of %v", records, dbs)
+	}
+}
+
+func cmpDB(a, b *leveldb.DB) (int, error) {
+	i := a.NewIterator(nil, nil)
+	defer func() { i.Release() }()
+
+	records := 0
+	for records = 0; i.Next(); records++ {
+		v, err := b.Get(i.Key(), nil)
+		if err != nil {
+			return records, err
+		}
+
+		if diff := deep.Equal(i.Value(), v); len(diff) > 0 {
+			return records, fmt.Errorf("unexpected diff: %v", diff)
+		}
+	}
+	return records, nil
 }
 
 func TestDbUpgrade(t *testing.T) {
@@ -231,8 +352,6 @@ func TestDbUpgrade(t *testing.T) {
 	if !keystonebh.Hash.IsEqual(&hash) {
 		t.Fatal("unexpected keystone hash")
 	}
-
-	// version 3 checks
 }
 
 func TestKeystonesInBlock(t *testing.T) {
