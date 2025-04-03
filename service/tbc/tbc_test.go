@@ -128,7 +128,7 @@ func countKeystones(b *btcutil.Block) int {
 }
 
 func TestDbUpgradePipeline(t *testing.T) {
-	home := "~/.tbcd"
+	home := "/home/antonio/.tbcd/"
 	network := "testnet3"
 	t.Logf("temp: %v", home)
 
@@ -137,7 +137,7 @@ func TestDbUpgradePipeline(t *testing.T) {
 	// 	t.Fatal(err)
 	// }
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
 		cancel()
 	}()
@@ -176,7 +176,7 @@ func TestDbUpgradePipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	home = "~/.tbcd_alt"
+	home = "/home/antonio/.tbcd_alt"
 	cfg = level.NewConfig(filepath.Join(home, network), "10mb", "10mb")
 
 	// Set mode to copy
