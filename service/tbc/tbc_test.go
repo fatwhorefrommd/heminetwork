@@ -158,19 +158,8 @@ func TestDbUpgradePipeline(t *testing.T) {
 	}
 	sort.Strings(keys)
 
-	// Rename database $HOME to $HOME.move
-	err = os.Rename(cfg.Home, cfg.Home+".move")
-	if err != nil {
-		t.Fatal(fmt.Errorf("rename destination: %w", err))
-	}
-
-	// Close temporary DB
-	if err = dbTemp.Close(); err != nil {
-		t.Fatal(err)
-	}
-
 	// Open move DB
-	cfgMove := level.NewConfig(filepath.Join(home, network+".move"), "10mb", "10mb")
+	cfgMove := level.NewConfig(filepath.Join(home, network), "10mb", "10mb")
 	dbMove, err := level.New(ctx, cfgMove)
 	if err != nil {
 		t.Fatal(err)
