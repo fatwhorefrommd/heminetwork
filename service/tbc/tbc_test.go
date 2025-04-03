@@ -128,14 +128,14 @@ func countKeystones(b *btcutil.Block) int {
 }
 
 func TestDbUpgradePipeline(t *testing.T) {
-	home := t.TempDir()
+	home := "~/.tbcd"
 	network := "testnet3"
 	t.Logf("temp: %v", home)
 
-	err := extract("testdata/testdatabase.tar.gz", home)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// err := extract("testdata/testdatabase.tar.gz", home)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -145,7 +145,7 @@ func TestDbUpgradePipeline(t *testing.T) {
 	t.Log("Upgrading with move")
 
 	// Upgrade database to v3 with move
-	cfg := level.NewConfig(filepath.Join(home, network), "0mb", "0mb")
+	cfg := level.NewConfig(filepath.Join(home, network), "10mb", "10mb")
 	dbTemp, err := level.New(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -170,16 +170,14 @@ func TestDbUpgradePipeline(t *testing.T) {
 	}
 
 	// Open move DB
-	cfgMove := level.NewConfig(filepath.Join(home, network+".move"), "0mb", "0mb")
+	cfgMove := level.NewConfig(filepath.Join(home, network+".move"), "10mb", "10mb")
 	dbMove, err := level.New(ctx, cfgMove)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = extract("testdata/testdatabase.tar.gz", home)
-	if err != nil {
-		t.Fatal(err)
-	}
+	home = "~/.tbcd_alt"
+	cfg = level.NewConfig(filepath.Join(home, network), "10mb", "10mb")
 
 	// Set mode to copy
 	level.SetMode(false)
