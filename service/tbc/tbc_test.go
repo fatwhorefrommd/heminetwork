@@ -158,12 +158,7 @@ func TestDbUpgradePipeline(t *testing.T) {
 	}
 	sort.Strings(keys)
 
-	// Open move DB
-	cfgMove := level.NewConfig(filepath.Join(home, network), "10mb", "10mb")
-	dbMove, err := level.New(ctx, cfgMove)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dbMove := dbTemp
 
 	home = "/home/antonio/.tbcd_alt"
 	cfg = level.NewConfig(filepath.Join(home, network), "10mb", "10mb")
@@ -181,7 +176,7 @@ func TestDbUpgradePipeline(t *testing.T) {
 	}
 
 	// Open copy DB
-	cfgCopy := level.NewConfig(filepath.Join(home, network+".v3"), "0mb", "0mb")
+	cfgCopy := level.NewConfig(filepath.Join(home, network+".v3"), "10mb", "10mb")
 	dbCopy, err := level.New(ctx, cfgCopy)
 	if err != nil {
 		t.Fatal(err)
