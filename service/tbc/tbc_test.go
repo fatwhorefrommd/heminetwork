@@ -193,28 +193,28 @@ func TestDbUpgradePipeline(t *testing.T) {
 		t.Logf("Comparing original records against dbmove (%v)", dbs)
 		records, err := cmpDB(a, b)
 		if err != nil {
-			t.Errorf("found diff in %v: %v", dbs, err)
+			t.Errorf("found diff in record %v: %v", records, err)
 		}
 		t.Logf("Found no diff in %v records of %v", records, dbs)
 
 		t.Logf("Comparing dbmove records against original (%v)", dbs)
 		records, err = cmpDB(b, a)
 		if err != nil {
-			t.Errorf("found diff in %v: %v", dbs, err)
+			t.Errorf("found diff in record %v: %v", records, err)
 		}
 		t.Logf("Found no diff in %v records of %v", records, dbs)
 
 		t.Logf("Comparing original records against dbcopy (%v)", dbs)
 		records, err = cmpDB(a, c)
 		if err != nil {
-			t.Errorf("found diff in %v: %v", dbs, err)
+			t.Errorf("found diff in record %v: %v", records, err)
 		}
 		t.Logf("Found no diff in %v records of %v", records, dbs)
 
 		t.Logf("Comparing dbcopy records against original (%v)", dbs)
 		records, err = cmpDB(c, a)
 		if err != nil {
-			t.Errorf("found diff in %v: %v", dbs, err)
+			t.Errorf("found diff in record %v: %v", records, err)
 		}
 		t.Logf("Found no diff in %v records of %v", records, dbs)
 	}
@@ -228,6 +228,7 @@ func cmpDB(a, b *leveldb.DB) (int, error) {
 	for records = 0; i.Next(); records++ {
 		v, err := b.Get(i.Key(), nil)
 		if err != nil {
+			spew.Dump(i.Value())
 			return records, err
 		}
 
