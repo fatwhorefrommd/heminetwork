@@ -170,7 +170,7 @@ func _copyOrMoveTable(ctx context.Context, move bool, a, b *leveldb.DB, dbname s
 				dbname, humanize.Comma(int64(cmr.Records)),
 				humanize.Bytes(uint64(cmr.Size)))
 			err := a.CompactRange(util.Range{
-				Start: nil,
+				Start: cmr.Range.Start,
 				Limit: cmr.Range.Limit,
 			})
 			if err != nil {
