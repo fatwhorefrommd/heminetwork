@@ -40,7 +40,6 @@ echo "setting hvm genesis to $BLOCKHEADER:$BLOCKHEIGHT"
  --ws.origins="*"  \
  --ws.api=debug,eth,txpool,net,engine  \
  --syncmode=full  \
- --gcmode=archive  \
  --nodiscover  \
  --maxpeers=0 \
  --networkid=901 \
