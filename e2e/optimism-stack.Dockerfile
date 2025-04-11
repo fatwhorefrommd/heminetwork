@@ -13,14 +13,12 @@ RUN git checkout 211fc204d86b64721abfecf825f850d0b9ae208e
 
 WORKDIR /git/op-geth
 
-RUN make
-
-RUN go build -o /tmp ./...
+RUN go run build/ci.go install -static ./cmd/geth
 
 FROM golang:1.22.6-bookworm@sha256:f020456572fc292e9627b3fb435c6de5dfb8020fbcef1fd7b65dd092c0ac56bb AS build_2
 
 # store the latest geth here, build with go 1.23
-COPY --from=build_1 /tmp/geth /bin/geth
+COPY --from=build_1 /git/op-geth/build/bin/geth /bin/geth
 
 RUN apt-get update
 
