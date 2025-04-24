@@ -44,7 +44,7 @@ const (
 	defaultPopChild       = 0
 	defaultRequestTimeout = 3 * time.Second
 
-	l2KeystonesMaxSize = 10
+	l2KeystonesLen = 10
 
 	bitcoinSourceBlockstream = "blockstream"
 	bitcoinSourceTBC         = "tbc"
@@ -128,7 +128,7 @@ func NewServer(cfg *Config) (*Server, error) {
 
 	s := &Server{
 		cfg:            cfg,
-		l2Keystones:    make(map[chainhash.Hash]L2KeystoneProcessingContainer, l2KeystonesMaxSize),
+		l2Keystones:    make(map[chainhash.Hash]L2KeystoneProcessingContainer, l2KeystonesLen),
 		mineNowCh:      make(chan struct{}, 1),
 		retryThreshold: uint32(cfg.RetryMineThreshold) * hemi.KeystoneHeaderPeriod,
 	}
@@ -213,6 +213,7 @@ func (s *Server) processKeystones(ctx context.Context, l2Keystones []hemi.L2Keys
 		return cmp.Compare(a.L2BlockNumber, b.L2BlockNumber)
 	})
 
+	process := func() {}
 	for _, kh := range l2Keystones {
 		select {
 		case <-ctx.Done():
@@ -226,22 +227,27 @@ func (s *Server) processKeystones(ctx context.Context, l2Keystones []hemi.L2Keys
 			lastL2BlockNumber = s.lastKeystone.L2BlockNumber
 		}
 
-		if s.lastKeystone == nil || kh.L2BlockNumber > s.lastKeystone.L2BlockNumber {
+		// if s.lastKeystone does not exist we add it; if the incoming
+		// keystone is more recent we replace lastKeystone.
+		if s.lastKeystone == nil ||
+			kh.L2BlockNumber > s.lastKeystone.L2BlockNumber {
 			s.lastKeystone = &kh
 			s.addL2Keystone(kh)
-			s.processMiningQueue(ctx)
+			process = func() { s.processMiningQueue(ctx) }
+			// process = func() { s.mineKnownKeystones(ctx) }
 			continue
 		}
 
-		if s.cfg.RetryMineThreshold > 0 {
-			if (lastL2BlockNumber - kh.L2BlockNumber) <= s.retryThreshold {
-				s.addL2Keystone(kh)
-				s.processMiningQueue(ctx)
-				continue
-			}
+		// Potentially mine keystones that
+		if lastL2BlockNumber-kh.L2BlockNumber <= s.retryThreshold {
+			s.addL2Keystone(kh)
+			process = func() { s.processMiningQueue(ctx) }
+			// process = func() { s.mineKnownKeystones(ctx) }
+			continue
 		}
-
 	}
+
+	process()
 }
 
 func (s *Server) addL2Keystone(ks hemi.L2Keystone) {
@@ -259,7 +265,7 @@ func (s *Server) addL2Keystone(ks hemi.L2Keystone) {
 		return
 	}
 
-	if len(s.l2Keystones) < l2KeystonesMaxSize {
+	if len(s.l2Keystones) < l2KeystonesLen {
 		// Insert key stone
 		s.l2Keystones[*ksHash] = kspc
 		return
@@ -455,13 +461,12 @@ func (s *Server) handleOpgethSubscription(ctx context.Context) error {
 		s.opgethWG.Done()
 	}()
 
-	headersCh := make(chan string, 1024) // XXX PNOOMA, figure this out
+	headersCh := make(chan string, l2KeystonesLen) // XXX is l2KeystonesLen right
 	sub, err := s.opgethClient.Client().Subscribe(ctx, "kss", headersCh)
 	if err != nil {
 		return err
 	}
 
-	numKeystones := 10 // XXX PNOOMA
 	for {
 		select {
 		case err := <-sub.Err():
@@ -473,11 +478,11 @@ func (s *Server) handleOpgethSubscription(ctx context.Context) error {
 			log.Tracef("kss notification received: %s", n)
 			var kresp popapi.L2KeystoneResponse
 			err := s.opgethClient.Client().Call(&kresp, "keystone_request",
-				numKeystones)
+				l2KeystonesLen)
 			if err != nil {
 				return err
 			}
-			if len(kresp.L2Keystones) > 0 {
+			if kresp.L2Keystones != nil && len(kresp.L2Keystones) > 0 {
 				s.processKeystones(ctx, kresp.L2Keystones)
 			}
 		}
