@@ -376,7 +376,7 @@ func dumpJson(mtx *sync.Mutex, s *state) string {
 
 	b, err := json.Marshal(output)
 	if err != nil {
-		panic(fmt.Sprintf("could not marsh output to json: %v", err))
+		panic(fmt.Sprintf("could not marshal output to json: %v", err))
 	}
 
 	return string(b)
